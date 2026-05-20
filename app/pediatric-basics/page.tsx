@@ -57,19 +57,23 @@ export default function PediatricBasicsPage() {
           {cards.map((card) => (
             <article
               key={card.title}
-              className="rounded-[18px] border border-[#0f24411f] bg-white overflow-hidden hover:shadow-lg transition-all min-h-[430px] flex flex-col"
+              className="rounded-3xl border border-border bg-card overflow-hidden hover:shadow-2xl hover:border-primary/20 hover:-translate-y-1.5 transition-all duration-300 min-h-[430px] flex flex-col"
             >
               <div className="p-3 pb-0">
-                <div className="rounded-[14px] overflow-hidden border border-[#0f24411f] relative">
+                <div className="rounded-2xl overflow-hidden border border-border/80 relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={card.image} alt={card.alt} className="w-full h-[148px] object-cover" />
-                  <div className="absolute bottom-2 left-2 right-2 bg-[#081d46] text-white text-center text-[28px] font-bold py-1.5 px-3 rounded-[10px] leading-none">
+                  <img 
+                    src={card.image} 
+                    alt={card.alt} 
+                    className="w-full h-[155px] object-cover transition-transform duration-500 hover:scale-105" 
+                  />
+                  <div className="absolute bottom-2 left-2 right-2 bg-background/95 text-foreground text-center text-sm md:text-base font-extrabold py-2 px-3 rounded-xl leading-tight shadow-md backdrop-blur-[2px]">
                     {card.title}
                   </div>
                 </div>
               </div>
-              <div className="px-5 py-5 flex-1 flex items-start">
-                <p className="text-[#0f2441] text-[17px] leading-[1.45] text-center">
+              <div className="px-5 py-6 flex-1 flex items-start justify-center">
+                <p className="text-muted-foreground text-sm sm:text-[15px] leading-relaxed text-center">
                   {card.description}
                 </p>
               </div>

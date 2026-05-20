@@ -71,8 +71,8 @@ const dailyRhythm = [
     label: "Evening",
     meal: "Fish or chicken with sweet potatoes and salad.",
     image:
-      "https://images.unsplash.com/photo-1467003909585-2f8b72700288?auto=format&fit=crop&q=80&w=800&h=520",
-    alt: "Evening meal with fish and vegetables",
+      "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&q=80&w=800&h=520",
+    alt: "Evening healthy cooked meal with salmon and vegetables",
   },
 ];
 
@@ -95,15 +95,15 @@ const wellnessCards = [
     title: "Follow your supplements",
     text: "Take iron and folic acid exactly as prescribed by your healthcare provider.",
     image:
-      "https://images.unsplash.com/photo-1584308666744-24d5c474f870?auto=format&fit=crop&q=80&w=800&h=520",
-    alt: "Vitamins and supplements with water",
+      "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&q=80&w=800&h=520",
+    alt: "Colorful healthy vitamins and capsules",
   },
   {
     title: "Avoid alcohol and excess sugar",
     text: "Avoid alcohol during pregnancy and limit highly processed, high-sugar foods.",
     image:
-      "https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=800&h=520",
-    alt: "Fresh water with citrus as a healthy drink choice",
+      "https://images.unsplash.com/photo-1527661591475-527312dd65f5?auto=format&fit=crop&q=80&w=800&h=520",
+    alt: "Red wine glass showing alcohol to avoid during pregnancy",
   },
 ];
 

@@ -1,26 +1,22 @@
 import Link from "next/link";
-import { ArrowLeft, Globe2, HeartHandshake, Shield, Sparkles, Target, Users } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 const values = [
   {
     title: "Compassionate Care",
     description: "We design every tool around the dignity, comfort, and safety of mothers and babies.",
-    icon: HeartHandshake,
   },
   {
     title: "Clinical Trust",
     description: "Our maternal workflows align with practical antenatal and postpartum care guidance.",
-    icon: Shield,
   },
   {
     title: "Inclusive Innovation",
     description: "We build for local communities using accessible language and culturally relevant support.",
-    icon: Sparkles,
   },
   {
     title: "Community First",
     description: "We partner with families, CHWs, and health professionals to improve outcomes together.",
-    icon: Users,
   },
 ];
 
@@ -80,35 +76,39 @@ export default function AboutPage() {
         </section>
 
         <section className="grid md:grid-cols-2 gap-6">
-          {values.map((value) => {
-            const Icon = value.icon;
-            return (
-              <article key={value.title} className="rounded-3xl border border-border bg-card p-6 hover:shadow-lg transition-all">
-                <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                  <Icon className="w-5 h-5 text-primary" />
-                </div>
-                <h2 className="text-xl font-extrabold text-foreground mb-2">{value.title}</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">{value.description}</p>
-              </article>
-            );
-          })}
+          {values.map((value) => (
+            <article 
+              key={value.title} 
+              className="group relative rounded-3xl border border-border bg-gradient-to-br from-card to-card/60 p-8 hover:shadow-2xl hover:border-primary/20 hover:-translate-y-1 transition-all duration-300 overflow-hidden"
+            >
+              {/* Elegant top-border gradient accent line */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 via-pink-400 to-primary opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              <h2 className="text-2xl font-black text-foreground mb-3 leading-snug group-hover:text-primary transition-colors duration-300">
+                {value.title}
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                {value.description}
+              </p>
+            </article>
+          ))}
         </section>
 
-        <section className="grid md:grid-cols-3 gap-6 mt-8">
-          <article className="rounded-3xl border border-border bg-card p-6">
-            <Target className="w-6 h-6 text-primary mb-3" />
-            <h3 className="text-lg font-extrabold text-foreground mb-2">Our Vision</h3>
-            <p className="text-sm text-muted-foreground">A world where every mother receives timely support and safe pregnancy care, no matter where she lives.</p>
+        <section className="grid md:grid-cols-3 gap-6 mt-12">
+          <article className="group relative rounded-3xl border border-border bg-gradient-to-br from-card to-card/60 p-6 hover:shadow-xl hover:border-primary/20 hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-pink-400 opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+            <h3 className="text-lg font-black text-foreground mb-2 group-hover:text-primary transition-colors duration-300">Our Vision</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">A world where every mother receives timely support and safe pregnancy care, no matter where she lives.</p>
           </article>
-          <article className="rounded-3xl border border-border bg-card p-6">
-            <Globe2 className="w-6 h-6 text-primary mb-3" />
-            <h3 className="text-lg font-extrabold text-foreground mb-2">Our Reach</h3>
-            <p className="text-sm text-muted-foreground">Designed for multilingual and multicultural communities, including local maternal-health contexts.</p>
+          <article className="group relative rounded-3xl border border-border bg-gradient-to-br from-card to-card/60 p-6 hover:shadow-xl hover:border-primary/20 hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-400 to-primary opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+            <h3 className="text-lg font-black text-foreground mb-2 group-hover:text-primary transition-colors duration-300">Our Reach</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">Designed for multilingual and multicultural communities, including local maternal-health contexts.</p>
           </article>
-          <article className="rounded-3xl border border-border bg-card p-6">
-            <HeartHandshake className="w-6 h-6 text-primary mb-3" />
-            <h3 className="text-lg font-extrabold text-foreground mb-2">Our Promise</h3>
-            <p className="text-sm text-muted-foreground">To keep improving care quality, clarity, and confidence for mothers, babies, and families.</p>
+          <article className="group relative rounded-3xl border border-border bg-gradient-to-br from-card to-card/60 p-6 hover:shadow-xl hover:border-primary/20 hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-rose-500 opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+            <h3 className="text-lg font-black text-foreground mb-2 group-hover:text-primary transition-colors duration-300">Our Promise</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">To keep improving care quality, clarity, and confidence for mothers, babies, and families.</p>
           </article>
         </section>
       </div>
