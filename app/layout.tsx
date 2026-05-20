@@ -3,6 +3,7 @@ import { Outfit, Playfair_Display } from "next/font/google";
 import { ThemeProvider } from "../components/ThemeProvider";
 import QueryProvider from "../components/QueryProvider";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -40,6 +41,7 @@ export default function RootLayout({
             {/* Global persistent Navbar - always visible on every page */}
             <Navbar />
             {children}
+            <Footer />
           </ThemeProvider>
         </QueryProvider>
       </body>
