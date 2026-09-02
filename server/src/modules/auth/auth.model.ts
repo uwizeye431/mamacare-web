@@ -44,3 +44,30 @@ export const updateUserProfile = async (
   );
   return res.rows[0];
 };
+
+export const upsertOtp = async (email: string, otp: string, expiresAt: Date) => {
+  await query('DELETE FROM user_otps WHERE email = $1', [email]);
+  const res = await query(
+    'INSERT INTO user_otps (email, otp, expires_at) VALUES ($1, $2, $3) RETURNING *',
+    [email, otp, expiresAt]
+  );
+  return res.rows[0];
+};
+
+export const findOtpByEmail = async (email: string) => {
+  const res = await query('SELECT * FROM user_otps WHERE email = $1 LIMIT 1', [email]);
+  return res.rows[0];
+};
+
+export const deleteOtpByEmail = async (email: string) => {
+  await query('DELETE FROM user_otps WHERE email = $1', [email]);
+};
+
+export const verifyUserEmail = async (email: string) => {
+  const res = await query(
+    'UPDATE users SET is_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE email = $1 RETURNING id, name, email, phone, role, language, avatar_url, is_verified',
+    [email]
+  );
+  return res.rows[0];
+};
+
