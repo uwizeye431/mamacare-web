@@ -1,12 +1,9 @@
+import './config/env';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
-import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import authRoutes from './modules/auth/auth.routes';
 import symptomsRoutes from './modules/symptoms/symptoms.routes';

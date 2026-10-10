@@ -1,8 +1,5 @@
+import '../config/env';
 import Anthropic from '@anthropic-ai/sdk';
-import dotenv from 'dotenv';
-import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',

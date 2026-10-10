@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { promises as dns } from 'dns';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -12,10 +13,20 @@ const getTransporter = async (): Promise<nodemailer.Transporter> => {
   const smtpPass = process.env.SMTP_PASS;
 
   if (smtpHost && smtpPort && smtpUser && smtpPass) {
+    // Connect over IPv4: many networks have no IPv6 route, which makes
+    // nodemailer fail with ENETUNREACH when it picks the host's IPv6 address.
+    let connectHost = smtpHost;
+    try {
+      connectHost = (await dns.lookup(smtpHost, { family: 4 })).address;
+    } catch (err) {
+      console.warn(`Mailer: IPv4 lookup for ${smtpHost} failed, using hostname.`, err);
+    }
+
     transporter = nodemailer.createTransport({
-      host: smtpHost,
+      host: connectHost,
       port: parseInt(smtpPort, 10),
       secure: smtpPort === '465',
+      tls: { servername: smtpHost },
       auth: {
         user: smtpUser,
         pass: smtpPass,
@@ -80,14 +91,17 @@ export const sendOtpEmail = async (to: string, otp: string, userName: string) =>
     </div>
   `;
 
-  // Print a high-visibility terminal ASCII banner containing the OTP
-  console.log('\n' + '='.repeat(60));
-  console.log('               MAMACARE EMAIL OTP VERIFICATION               ');
-  console.log('='.repeat(60));
-  console.log(`  To User:    ${userName} (${to})`);
-  console.log(`  OTP Code:   [  ${otp}  ]`);
-  console.log(`  Expires:    In 10 minutes`);
-  console.log('='.repeat(60) + '\n');
+  // Print a high-visibility terminal ASCII banner containing the OTP (dev only:
+  // in production the code must never end up in logs)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n' + '='.repeat(60));
+    console.log('               MAMACARE EMAIL OTP VERIFICATION               ');
+    console.log('='.repeat(60));
+    console.log(`  To User:    ${userName} (${to})`);
+    console.log(`  OTP Code:   [  ${otp}  ]`);
+    console.log(`  Expires:    In 10 minutes`);
+    console.log('='.repeat(60) + '\n');
+  }
 
   try {
     const mailTransporter = await getTransporter();
