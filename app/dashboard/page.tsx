@@ -4,65 +4,48 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  Heart, Calendar, Activity, MapPin, Plus, Sparkles, AlertTriangle, 
-  CheckCircle2, Clock, ShieldCheck, Phone, RefreshCw, ChevronRight, User, Award, ArrowLeft
+  Heart, Calendar, Activity, MapPin, Plus, Sparkles,
+  Clock, ShieldCheck, Phone, RefreshCw, ChevronRight, Award, ArrowLeft
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { loadPatientData } from '../../lib/patientData';
+import { errorMessage } from '../../lib/errors';
+import type { AncVisit, ProfileResponse } from '../../lib/types';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   
-  const [profileData, setProfileData] = useState<any>(null);
-  const [visits, setVisits] = useState<any[]>([]);
+  const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
+  const [visits, setVisits] = useState<AncVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // 1. Fetch Profile
-      const profileRes = await fetch('http://localhost:5000/api/profile/me', {
-        method: 'GET',
-        credentials: 'include'
-      });
-
-      if (profileRes.status === 404) {
-        // No active pregnancy profile setup yet
-        setProfileData(null);
-        setLoading(false);
-        return;
-      }
-
-      if (!profileRes.ok) {
-        throw new Error('Failed to load profile details');
-      }
-
-      const pData = await profileRes.json();
-      setProfileData(pData);
-
-      // 2. Fetch ANC visits linked
-      const visitsRes = await fetch('http://localhost:5000/api/visits', {
-        method: 'GET',
-        credentials: 'include'
-      });
-
-      if (visitsRes.ok) {
-        const vData = await visitsRes.json();
-        setVisits(vData.visits || []);
-      }
-    } catch (err: any) {
-      console.error('Error loading dashboard:', err);
-      setError(err.message || 'Error connecting to servers.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [reloadKey, setReloadKey] = useState(0); // bump to load again ("Try again")
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    let cancelled = false;
+    loadPatientData()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'unauthorized') {
+          router.push('/login');
+          return;
+        }
+        setProfileData(result.profile);
+        setVisits(result.visits);
+      })
+      .catch((err) => {
+        console.error('Error loading dashboard:', err);
+        if (!cancelled) setError(errorMessage(err, 'Could not load your dashboard. Please try again.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router, reloadKey]);
 
   if (loading) {
     return (
@@ -72,6 +55,24 @@ export default function DashboardPage() {
       </div>
     );
   }
+  if (error) {
+    return (
+      <main className="min-h-screen w-full bg-background flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-black text-foreground mb-2">We couldn&apos;t load your dashboard</h1>
+          <p className="text-sm text-muted-foreground mb-6">{error}</p>
+          <button
+            type="button"
+            onClick={() => { setLoading(true); setError(''); setReloadKey((k) => k + 1); }}
+            className="px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all"
+          >
+            Try again
+          </button>
+        </div>
+      </main>
+    );
+  }
+
 
   // 1. Placeholder state: User has not setup their pregnancy profile yet!
   if (!profileData) {
@@ -206,7 +207,7 @@ export default function DashboardPage() {
                 <div className="mt-6 flex items-center gap-3 p-3 bg-primary/5 rounded-2xl border border-primary/10">
                   <Calendar className="w-5 h-5 text-primary shrink-0" />
                   <div>
-                    <div className="text-xs font-bold text-foreground">EDD: {new Date(profile.edd).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'})}</div>
+                    <div className="text-xs font-bold text-foreground">EDD: {profile.edd ? new Date(profile.edd).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}) : 'not set'}</div>
                     <div className="text-[10px] text-primary font-bold">{calculations.daysToDelivery} days left to delivery</div>
                   </div>
                 </div>
@@ -281,7 +282,7 @@ export default function DashboardPage() {
 
               {/* Visits list */}
               <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                {visits.map((visit: any, index: number) => {
+                {visits.map((visit, index) => {
                   const isCompleted = !!visit.actual_date;
                   return (
                     <div 
@@ -313,7 +314,7 @@ export default function DashboardPage() {
                               )}
                             </div>
                             <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5" /> Due: {new Date(visit.scheduled_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}
+                              <Calendar className="w-3.5 h-3.5" /> Due: {visit.scheduled_date ? new Date(visit.scheduled_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : 'not scheduled'}
                             </div>
                           </div>
                         </div>

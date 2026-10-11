@@ -4,76 +4,51 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  Heart, Calendar, Activity, TrendingUp, AlertTriangle, CheckCircle2, 
-  Clock, Printer, ArrowLeft, RefreshCw, Sparkles, ShieldAlert, BarChart3
+  Heart, Activity, TrendingUp, AlertTriangle,
+  Printer, ArrowLeft, RefreshCw, Sparkles, ShieldAlert, BarChart3
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { errorMessage } from '../../lib/errors';
+import { loadPatientData } from '../../lib/patientData';
+import type { AncVisit, PregnancyProfile, SymptomLog } from '../../lib/types';
 
 export default function ReportPage() {
   const router = useRouter();
   const { user } = useAuthStore();
 
-  const [symptomHistory, setSymptomHistory] = useState<any[]>([]);
-  const [visits, setVisits] = useState<any[]>([]);
-  const [profile, setProfile] = useState<any>(null);
+  const [symptomHistory, setSymptomHistory] = useState<SymptomLog[]>([]);
+  const [visits, setVisits] = useState<AncVisit[]>([]);
+  const [profile, setProfile] = useState<PregnancyProfile | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState<'7' | '30' | 'all'>('all');
   const [error, setError] = useState('');
-
-  const fetchReportData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // 1. Fetch profile
-      const profileRes = await fetch('http://localhost:5000/api/profile/me', {
-        method: 'GET',
-        credentials: 'include'
-      });
-
-      if (profileRes.status === 404) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-      
-      if (profileRes.ok) {
-        const pData = await profileRes.json();
-        setProfile(pData.profile);
-      }
-
-      // 2. Fetch symptoms history
-      const symptomsRes = await fetch('http://localhost:5000/api/symptoms/history', {
-        method: 'GET',
-        credentials: 'include'
-      });
-
-      if (symptomsRes.ok) {
-        const sData = await symptomsRes.json();
-        setSymptomHistory(sData.logs || []);
-      }
-
-      // 3. Fetch visits history
-      const visitsRes = await fetch('http://localhost:5000/api/visits', {
-        method: 'GET',
-        credentials: 'include'
-      });
-
-      if (visitsRes.ok) {
-        const vData = await visitsRes.json();
-        setVisits(vData.visits || []);
-      }
-    } catch (err: any) {
-      console.error('Error fetching health report:', err);
-      setError('Could not load report details. Make sure your server is active.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [reloadKey, setReloadKey] = useState(0); // bump to load again ("Try again")
 
   useEffect(() => {
-    fetchReportData();
-  }, []);
+    let cancelled = false;
+    loadPatientData({ includeLogs: true })
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'unauthorized') {
+          router.push('/login');
+          return;
+        }
+        setProfile(result.profile?.profile ?? null);
+        setSymptomHistory(result.logs);
+        setVisits(result.visits);
+      })
+      .catch((err) => {
+        console.error('Error fetching health report:', err);
+        if (!cancelled) setError(errorMessage(err, 'Could not load your report. Please try again.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router, reloadKey]);
 
   if (loading) {
     return (
@@ -83,6 +58,24 @@ export default function ReportPage() {
       </div>
     );
   }
+  if (error) {
+    return (
+      <main className="min-h-screen w-full bg-background flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-black text-foreground mb-2">We couldn&apos;t load your report</h1>
+          <p className="text-sm text-muted-foreground mb-6">{error}</p>
+          <button
+            type="button"
+            onClick={() => { setLoading(true); setError(''); setReloadKey((k) => k + 1); }}
+            className="px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all"
+          >
+            Try again
+          </button>
+        </div>
+      </main>
+    );
+  }
+
 
   if (!profile) {
     return (
@@ -117,15 +110,17 @@ export default function ReportPage() {
   const filteredSymptoms = symptomHistory.filter(log => filterByDate(log.created_at));
   
   // Completed visits with vital details
-  const completedVisits = visits.filter(v => v.actual_date && filterByDate(v.actual_date));
+  const completedVisits = visits.filter(
+    (v): v is AncVisit & { actual_date: string } => !!v.actual_date && filterByDate(v.actual_date)
+  );
 
   // 1. Calculate aggregated triage statistics
-  const redCount = filteredSymptoms.filter(s => s.triage_level === 'RED').length;
-  const yellowCount = filteredSymptoms.filter(s => s.triage_level === 'YELLOW').length;
-  const greenCount = filteredSymptoms.filter(s => s.triage_level === 'GREEN').length;
+  // triage_level is stored in lower case ('red' | 'yellow' | 'green')
+  const redCount = filteredSymptoms.filter(s => s.triage_level === 'red').length;
+  const yellowCount = filteredSymptoms.filter(s => s.triage_level === 'yellow').length;
 
   // 2. Identify clinical warnings and dangerous parameters
-  const recentRedLogs = filteredSymptoms.filter(s => s.triage_level === 'RED').slice(0, 3);
+  const recentRedLogs = filteredSymptoms.filter(s => s.triage_level === 'red').slice(0, 3);
 
   // 3. Preeclampsia Screening Vitals Analysis (Systolic >= 140 or Diastolic >= 90 is high alert!)
   const highBpAlert = completedVisits.some(v => (v.bp_systolic && v.bp_systolic >= 140) || (v.bp_diastolic && v.bp_diastolic >= 90));
@@ -187,7 +182,7 @@ export default function ReportPage() {
               
               <h2 className="text-3xl font-extrabold text-foreground tracking-tight">Pregnancy Health Report</h2>
               <p className="text-muted-foreground text-sm mt-1 print:text-slate-600">
-                Patient: <span className="font-bold text-foreground print:text-slate-900">{user?.name}</span> • Gestational Profile calculation based on LMP: <span className="font-bold text-primary">{new Date(profile.lmp).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'})}</span>.
+                Patient: <span className="font-bold text-foreground print:text-slate-900">{user?.name}</span> • Gestational Profile calculation based on LMP: <span className="font-bold text-primary">{profile.lmp ? new Date(profile.lmp).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}) : 'not set'}</span>.
               </p>
             </div>
 
@@ -196,7 +191,7 @@ export default function ReportPage() {
               <label className="text-xs font-bold text-muted-foreground uppercase">Filter period:</label>
               <select
                 value={filterPeriod}
-                onChange={(e) => setFilterPeriod(e.target.value as any)}
+                onChange={(e) => setFilterPeriod(e.target.value as '7' | '30' | 'all')}
                 className="px-4 py-2.5 rounded-xl border border-border bg-card text-foreground text-xs font-bold focus:ring-2 focus:ring-primary outline-none cursor-pointer"
               >
                 <option value="7">Last 7 Days</option>
@@ -278,12 +273,12 @@ export default function ReportPage() {
                       <div key={v.id} className="flex justify-between items-center text-xs">
                         <span className="font-bold text-foreground">Visit {i + 1} ({new Date(v.actual_date).toLocaleDateString()})</span>
                         <div className="flex items-center gap-3">
-                          <span className="text-muted-foreground font-semibold">{v.weight_kg} kg</span>
+                          <span className="text-muted-foreground font-semibold">{v.weight_kg != null ? `${v.weight_kg} kg` : '—'}</span>
                           {/* Visual progress bar representation */}
                           <div className="w-20 h-2 bg-muted rounded-full overflow-hidden hidden sm:block">
                             <div 
                               className="h-full bg-primary rounded-full" 
-                              style={{ width: `${Math.min(100, (v.weight_kg / 100) * 100)}%` }}
+                              style={{ width: `${Math.min(100, Number(v.weight_kg ?? 0))}%` }}
                             ></div>
                           </div>
                         </div>
@@ -297,14 +292,15 @@ export default function ReportPage() {
                   <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Blood Pressure (BP) Trend</div>
                   <div className="space-y-3">
                     {completedVisits.map((v, i) => {
-                      const isHigh = v.bp_systolic >= 140 || v.bp_diastolic >= 90;
+                      // 140/90 mmHg or above is high blood pressure in pregnancy
+                      const isHigh = (v.bp_systolic ?? 0) >= 140 || (v.bp_diastolic ?? 0) >= 90;
                       return (
                         <div key={v.id} className="flex justify-between items-center text-xs">
                           <span className="font-bold text-foreground">Visit {i + 1} ({new Date(v.actual_date).toLocaleDateString()})</span>
                           <span className={`px-2 py-0.5 rounded-lg font-bold ${
                             isHigh ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500'
                           }`}>
-                            {v.bp_systolic}/{v.bp_diastolic} mmHg
+                            {v.bp_systolic != null && v.bp_diastolic != null ? `${v.bp_systolic}/${v.bp_diastolic} mmHg` : '—'}
                           </span>
                         </div>
                       );
@@ -360,7 +356,7 @@ export default function ReportPage() {
                             <span className="font-black text-foreground">{new Date(log.created_at).toLocaleDateString()}</span>
                             <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-500 font-bold uppercase text-[9px]">Danger signal</span>
                           </div>
-                          <p className="text-muted-foreground leading-relaxed italic">"{log.description}"</p>
+                          <p className="text-muted-foreground leading-relaxed italic">&ldquo;{log.symptoms}&rdquo;</p>
                         </div>
                       ))}
                     </div>
@@ -377,12 +373,12 @@ export default function ReportPage() {
                         <div key={log.id} className="flex items-start justify-between gap-3 text-xs border-b border-border/30 pb-3 last:border-none last:pb-0">
                           <div>
                             <div className="font-bold text-foreground">{new Date(log.created_at).toLocaleDateString()}</div>
-                            <p className="text-muted-foreground text-[11px] mt-0.5 leading-relaxed">"{log.description}"</p>
+                            <p className="text-muted-foreground text-[11px] mt-0.5 leading-relaxed">&ldquo;{log.symptoms}&rdquo;</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold tracking-wider uppercase shrink-0 ${
-                            level === 'RED' 
+                            level === 'red'
                               ? 'bg-red-500/10 text-red-500' 
-                              : level === 'YELLOW' 
+                              : level === 'yellow'
                               ? 'bg-amber-500/10 text-amber-500' 
                               : 'bg-green-500/10 text-green-500'
                           }`}>

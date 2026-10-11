@@ -1,51 +1,52 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { Heart, Activity, AlertTriangle, ShieldAlert, Sparkles, CheckCircle2, Key, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { Activity, AlertTriangle, ArrowLeft, ShieldAlert, Stethoscope, CheckCircle2, ArrowRight, Loader2, Phone, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { API_URL } from '../../lib/api';
+import type { SymptomLog } from '../../lib/types';
+
+const subscribeNoop = () => () => {};
+
+const EXAMPLES = [
+  { key: 'bleeding', className: 'border-destructive/30 hover:bg-destructive/5 text-destructive' },
+  { key: 'headache', className: 'border-destructive/30 hover:bg-destructive/5 text-destructive' },
+  { key: 'nausea', className: 'border-amber-500/30 hover:bg-amber-500/5 text-amber-600 dark:text-amber-400' },
+] as const;
 
 export default function SymptomsTriagePage() {
-  const { user, isAuthenticated, setAuth, clearAuth } = useAuthStore();
-  
+  const t = useTranslations('Symptoms');
+  const tAuth = useTranslations('Auth');
+  const locale = useLocale();
+  const { user, isAuthenticated: storedAuth, clearAuth } = useAuthStore();
+
+  // The auth store is persisted in localStorage, which the server render can't see.
+  // Only trust it in the browser (false during server render), to avoid a hydration mismatch.
+  const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  const isAuthenticated = isClient && storedAuth;
+
   const [symptoms, setSymptoms] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<SymptomLog | null>(null);
 
-  // Auto-login utility for quick testing
-  const handleAutoLogin = async () => {
-    setLoading(true);
-    setError('');
+  // Clear the server session cookies as well as the local login state
+  const handleLogout = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // CRITICAL: Allow cross-origin cookie sharing
-        body: JSON.stringify({
-          identifier: 'uwizeyekevin43@gmail.com',
-          password: 'Password123',
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to login');
-      }
-      setAuth(data.user);
-    } catch (err: any) {
-      setError('Auto-login failed. Please ensure the backend is running and the database is configured.');
-    } finally {
-      setLoading(false);
+      await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch {
+      // Even if the server is unreachable, still log out locally
     }
+    clearAuth();
+    setResult(null);
   };
 
   const handleTriageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!symptoms.trim()) {
-      setError('Please describe your symptoms.');
+      setError(t('describeFirst'));
       return;
     }
 
@@ -54,49 +55,26 @@ export default function SymptomsTriagePage() {
     setResult(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/symptoms/log', {
+      const response = await fetch(`${API_URL}/api/symptoms/log`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // CRITICAL: Allow cross-origin session credentials to be sent
-        body: JSON.stringify({ symptoms }),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Send the session cookies to the API
+        // The answer comes back in the interface language
+        body: JSON.stringify({ symptoms, language: locale }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Unauthorized. Your session might have expired. Please try clicking "Quick Auto-Login" above.');
-        }
-        throw new Error(data.error || 'Triage logging failed');
+        throw new Error(data.error || t('failed'));
       }
 
       setResult(data.log);
-    } catch (err: any) {
-      setError(err.message || 'Triage failed. Make sure you are logged in and the server is running.');
+    } catch (err) {
+      setError(err instanceof TypeError ? tAuth('cannotReachServer') : err instanceof Error && err.message ? err.message : t('failed'));
     } finally {
       setLoading(false);
     }
   };
-
-  // Quick preset symptom injectors for testing
-  const testPresets = [
-    {
-      title: '🔴 Critical WHO Bleeding',
-      text: 'I am in my 24th week and started having sudden vaginal bleeding this morning.',
-      class: 'border-destructive/30 hover:bg-destructive/5 text-destructive'
-    },
-    {
-      title: '🔴 Critical WHO Head/Vision',
-      text: 'I have a very severe headache that won\'t go away and blurred vision.',
-      class: 'border-destructive/30 hover:bg-destructive/5 text-destructive'
-    },
-    {
-      title: '🟡 Mild Sickness (Normal)',
-      text: 'I feel slightly nauseous in the mornings and a bit fatigued, but no severe pains.',
-      class: 'border-amber-500/30 hover:bg-amber-500/5 text-amber-600 dark:text-amber-400'
-    }
-  ];
 
   return (
     <main className="min-h-screen w-full bg-background py-16 px-4 relative overflow-hidden">
@@ -105,111 +83,101 @@ export default function SymptomsTriagePage() {
       <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-secondary/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="w-full max-w-4xl mx-auto relative z-10">
-        
-        {/* Navigation back */}
-        <div className="mb-8">
+
+        <div className="mb-8 pt-8">
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-            ← Back to Homepage
+            <ArrowLeft className="w-4 h-4" /> {t('back')}
           </Link>
         </div>
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 border-b border-border pb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-border pb-8">
           <div>
             <div className="flex items-center gap-3 mb-3">
               <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" /> Clinical Triage Lab
+                <Stethoscope className="w-3.5 h-3.5" /> {t('badge')}
               </span>
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">AI Symptom Triage Playground</h1>
-            <p className="text-muted-foreground mt-2">
-              Test real-time maternal danger sign detection and Anthropic Claude 3.5 Sonnet analysis.
-            </p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">{t('title')}</h1>
+            <p className="text-muted-foreground mt-2 max-w-2xl">{t('intro')}</p>
           </div>
 
           {/* Session controls */}
-          <div className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <div className="flex items-center gap-4 p-3 rounded-2xl bg-card border border-border shadow-sm">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                  {user?.name.charAt(0)}
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Logged in as</div>
-                  <div className="text-sm font-bold text-foreground">{user?.name}</div>
-                </div>
-                <button
-                  onClick={() => clearAuth()}
-                  className="text-xs font-bold text-destructive hover:underline ml-2"
-                >
-                  Log out
-                </button>
+          {isAuthenticated ? (
+            <div className="flex items-center gap-4 p-3 rounded-2xl bg-card border border-border shadow-sm shrink-0">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                {user?.name?.charAt(0)}
               </div>
-            ) : (
-              <button
-                onClick={handleAutoLogin}
-                disabled={loading}
-                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/95 transition-all shadow-md"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                Quick Auto-Login (Kevin)
+              <div>
+                <div className="text-xs text-muted-foreground">{t('loggedInAs')}</div>
+                <div className="text-sm font-bold text-foreground">{user?.name}</div>
+              </div>
+              <button onClick={handleLogout} className="text-xs font-bold text-destructive hover:underline ml-2">
+                {t('logout')}
               </button>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
 
+        <a
+          href="tel:912"
+          className="mb-8 flex items-center gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm font-semibold text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <Phone className="w-5 h-5 shrink-0" />
+          {t('emergency')}
+        </a>
+
         {error && (
-          <div className="mb-8 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive flex items-start gap-3">
+          <div role="alert" className="mb-8 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive flex items-start gap-3">
             <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
             <div className="text-sm font-semibold">{error}</div>
           </div>
         )}
 
         <div className="grid md:grid-cols-5 gap-8">
-          
-          {/* Form and Triage Logger */}
+
+          {/* Form */}
           <div className="md:col-span-3 space-y-8">
             <div className="glass p-6 sm:p-8 rounded-3xl border border-border shadow-lg">
-              <h2 className="text-xl font-extrabold text-foreground mb-4">1. Describe the Patient's Symptoms</h2>
-              
+              <label htmlFor="symptoms" className="block text-xl font-extrabold text-foreground mb-4">
+                {t('describeHeading')}
+              </label>
+
               <form onSubmit={handleTriageSubmit} className="space-y-6">
-                <div>
-                  <textarea
-                    rows={6}
-                    value={symptoms}
-                    onChange={(e) => setSymptoms(e.target.value)}
-                    placeholder="Describe how the patient is feeling... E.g., 'I am experiencing a severe headache and have blurred vision.' (Supports English and Kinyarwanda)"
-                    className="block w-full p-4 rounded-2xl bg-card border border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none resize-none"
-                    disabled={!isAuthenticated || loading}
-                    required
-                  />
-                  {!isAuthenticated && (
-                    <p className="mt-2 text-xs text-destructive font-semibold">
-                      ⚠️ You must click "Quick Auto-Login" above to log in and start using the triage interface.
-                    </p>
-                  )}
-                </div>
+                <textarea
+                  id="symptoms"
+                  rows={6}
+                  value={symptoms}
+                  onChange={(e) => setSymptoms(e.target.value)}
+                  placeholder={t('placeholder')}
+                  maxLength={2000}
+                  className="block w-full p-4 rounded-2xl bg-card border border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none resize-none"
+                  disabled={loading}
+                  required
+                />
 
                 <div className="flex items-center justify-between gap-4">
                   <button
                     type="submit"
-                    disabled={!isAuthenticated || loading}
+                    disabled={loading}
                     className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/95 transition-all shadow-lg disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="w-5 h-5 animate-spin" /> Evaluating Symptoms...
+                        <Loader2 className="w-5 h-5 animate-spin" /> {t('analyzing')}
                       </>
                     ) : (
                       <>
-                        Analyze Symptoms <ArrowRight className="w-5 h-5" />
+                        {t('analyze')} <ArrowRight className="w-5 h-5" />
                       </>
                     )}
                   </button>
-                  
+
                   <button
                     type="button"
-                    onClick={() => { setSymptoms(''); setResult(null); }}
+                    onClick={() => { setSymptoms(''); setResult(null); setError(''); }}
+                    aria-label={t('clear')}
+                    title={t('clear')}
                     className="p-4 rounded-2xl bg-card border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
                   >
                     <RefreshCw className="w-5 h-5" />
@@ -218,28 +186,30 @@ export default function SymptomsTriagePage() {
               </form>
             </div>
 
-            {/* Test Presets Deck */}
+            {/* Examples */}
             <div className="glass p-6 rounded-3xl border border-border">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">Quick Test Presets</h3>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">{t('examplesHeading')}</h2>
               <div className="grid gap-3">
-                {testPresets.map((preset, idx) => (
+                {EXAMPLES.map((example) => (
                   <button
-                    key={idx}
+                    key={example.key}
                     type="button"
-                    disabled={!isAuthenticated || loading}
-                    onClick={() => setSymptoms(preset.text)}
-                    className={`p-4 rounded-2xl border text-left text-sm font-medium transition-all flex justify-between items-center bg-card ${preset.class} disabled:opacity-50`}
+                    disabled={loading}
+                    onClick={() => setSymptoms(t(`examples.${example.key}.text`))}
+                    className={`p-4 rounded-2xl border text-left text-sm font-medium transition-all flex justify-between items-center gap-4 bg-card ${example.className} disabled:opacity-50`}
                   >
-                    <span>{preset.title}</span>
-                    <span className="text-xs opacity-75 font-normal line-clamp-1 max-w-[200px] sm:max-w-xs">{preset.text}</span>
+                    <span>{t(`examples.${example.key}.label`)}</span>
+                    <span className="text-xs opacity-75 font-normal line-clamp-1 max-w-[200px] sm:max-w-xs">
+                      {t(`examples.${example.key}.text`)}
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Results Presentation (Right panel) */}
-          <div className="md:col-span-2">
+          {/* Result */}
+          <div className="md:col-span-2" aria-live="polite">
             {result ? (
               <div className={`rounded-3xl p-8 border shadow-xl relative overflow-hidden transition-all ${
                 result.triage_level === 'red'
@@ -248,79 +218,74 @@ export default function SymptomsTriagePage() {
                     ? 'bg-amber-500/5 border-amber-500/20 text-amber-600 dark:text-amber-400'
                     : 'bg-green-500/5 border-green-500/20 text-green-600 dark:text-green-400'
               }`}>
-                {/* Result header / Alert style */}
                 <div className="flex items-center gap-3 mb-6">
                   {result.triage_level === 'red' ? (
-                    <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center animate-pulse">
+                    <div className="w-12 h-12 shrink-0 rounded-2xl bg-destructive/10 flex items-center justify-center animate-pulse">
                       <ShieldAlert className="w-6 h-6 text-destructive" />
                     </div>
                   ) : result.triage_level === 'yellow' ? (
-                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                    <div className="w-12 h-12 shrink-0 rounded-2xl bg-amber-500/10 flex items-center justify-center">
                       <AlertTriangle className="w-6 h-6 text-amber-500" />
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center">
+                    <div className="w-12 h-12 shrink-0 rounded-2xl bg-green-500/10 flex items-center justify-center">
                       <CheckCircle2 className="w-6 h-6 text-green-500" />
                     </div>
                   )}
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider opacity-75">Triage Severity</div>
-                    <div className="text-2xl font-extrabold uppercase tracking-tight">{result.triage_level}</div>
+                    <div className="text-xs font-bold uppercase tracking-wider opacity-75">{t('resultLabel')}</div>
+                    <div className="text-lg font-extrabold leading-snug">{t(`levels.${result.triage_level}`)}</div>
                   </div>
                 </div>
 
                 <div className="space-y-6">
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Patient's Input</h4>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">{t('youWrote')}</h3>
                     <p className="text-sm font-medium text-foreground italic border-l-2 border-muted pl-3">
-                      "{result.symptoms}"
+                      &ldquo;{result.symptoms}&rdquo;
                     </p>
                   </div>
 
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Triage Explanation</h4>
-                    <p className="text-sm text-foreground leading-relaxed font-semibold">
-                      {result.ai_analysis?.explanation}
-                    </p>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">{t('whatItMeans')}</h3>
+                    <p className="text-sm text-foreground leading-relaxed font-semibold">{result.ai_analysis?.explanation}</p>
                   </div>
 
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Recommended Actions</h4>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">{t('whatToDo')}</h3>
                     <ul className="space-y-2">
-                      {result.ai_analysis?.actions.map((act: string, idx: number) => (
-                        <li key={idx} className="flex items-start gap-2.5 text-xs text-foreground font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5"></span>
+                      {(result.ai_analysis?.actions ?? []).map((act, idx) => (
+                        <li key={idx} className="flex items-start gap-2.5 text-sm text-foreground font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2"></span>
                           <span>{act}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  {result.ai_analysis?.override && (
-                    <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-[11px] font-bold">
-                      ⚠️ WHO Danger Sign override triggered! The system automatically bypassed the standard AI engine to guarantee clinical safety.
+                  {result.ai_analysis?.override && result.triage_level === 'red' && (
+                    <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-bold">
+                      {t('safetyRule')}
                     </div>
                   )}
 
-                  <div className="border-t border-border pt-4 mt-6 text-[10px] text-muted-foreground flex justify-between">
-                    <span>Logged ID: {result.id.slice(0, 8)}...</span>
-                    <span>{new Date(result.created_at).toLocaleTimeString()}</span>
+                  <div className="border-t border-border pt-4 mt-6 text-[11px] text-muted-foreground flex justify-between gap-4">
+                    <span>{result.id ? t('saved') : ''}</span>
+                    <span>{new Date(result.created_at).toLocaleTimeString(locale === 'rw' ? 'rw-RW' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="h-full min-h-[350px] border-2 border-dashed border-border rounded-3xl flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                <Activity className="w-12 h-12 text-muted-foreground/30 mb-4 animate-pulse" />
-                <h4 className="font-extrabold text-foreground mb-2">Waiting for Triage Analysis</h4>
-                <p className="text-xs max-w-xs">
-                  Describe symptoms on the left panel or click a Quick Test Preset to see real-time AI risk assessment.
-                </p>
+                <Activity className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                <h2 className="font-extrabold text-foreground mb-2">{t('waitingTitle')}</h2>
+                <p className="text-xs max-w-xs">{t('waitingText')}</p>
               </div>
             )}
           </div>
-
         </div>
 
+        <p className="mt-10 text-xs text-muted-foreground text-center max-w-2xl mx-auto">{t('disclaimer')}</p>
       </div>
     </main>
   );

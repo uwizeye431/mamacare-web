@@ -1,15 +1,30 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, User, Heart, Sparkles, AlertCircle, CheckCircle2, ArrowRight, Loader2, Info } from 'lucide-react';
-import { useAuthStore } from '../../store/authStore';
+import { Calendar, Heart, Sparkles, AlertCircle, CheckCircle2, ArrowRight, Loader2, Info } from 'lucide-react';
+import { API_URL } from '../../lib/api';
+import { errorMessage } from '../../lib/errors';
+
+// Due date (LMP + 280 days) and gestational age. "yyyy-mm-dd" is parsed as a local date:
+// new Date("yyyy-mm-dd") would be UTC midnight and can shift the result by a day.
+const calculatePregnancy = (lmp: string) => {
+  const [y, m, d] = lmp.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const lmpDate = new Date(y, m - 1, d);
+  const eddDate = new Date(y, m - 1, d + 280);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((today.getTime() - lmpDate.getTime()) / (1000 * 60 * 60 * 24));
+  return {
+    edd: eddDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    weeks: diffDays >= 0 ? Math.floor(diffDays / 7) : 0,
+    days: diffDays >= 0 ? diffDays % 7 : 0,
+  };
+};
 
 export default function ProfileSetupPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
   
   const [lmp, setLmp] = useState('');
   const [gravida, setGravida] = useState('1');
@@ -19,47 +34,8 @@ export default function ProfileSetupPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Live calculations to display to the user as they change lmp
-  const [calculations, setCalculations] = useState<{
-    edd: string;
-    weeks: number;
-    days: number;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!lmp) {
-      setCalculations(null);
-      return;
-    }
-
-    const lmpDate = new Date(lmp);
-    if (isNaN(lmpDate.getTime())) {
-      setCalculations(null);
-      return;
-    }
-
-    // EDD: LMP + 280 days
-    const eddDate = new Date(lmpDate.getTime());
-    eddDate.setDate(eddDate.getDate() + 280);
-
-    // Gestational Age
-    const today = new Date();
-    const diffTime = today.getTime() - lmpDate.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    let weeks = 0;
-    let days = 0;
-    if (diffDays >= 0) {
-      weeks = Math.floor(diffDays / 7);
-      days = diffDays % 7;
-    }
-
-    setCalculations({
-      edd: eddDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      weeks,
-      days
-    });
-  }, [lmp]);
+  // Live calculations shown as the user picks their LMP (derived on each render, no state needed)
+  const calculations = calculatePregnancy(lmp);
 
   const maternalConditions = [
     { id: 'chronic_hypertension', label: 'Chronic Hypertension' },
@@ -88,7 +64,7 @@ export default function ProfileSetupPage() {
     setError('');
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/profile`, {
+      const response = await fetch(`${API_URL}/api/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,12 +87,8 @@ export default function ProfileSetupPage() {
       setTimeout(() => {
         router.push('/dashboard');
       }, 1500);
-    } catch (err: any) {
-      if (err instanceof TypeError) {
-        setError('Unable to reach the profile service. Please make sure the backend server is running on port 5000, then try again.');
-      } else {
-        setError(err.message || 'Profile setup failed. Please try again.');
-      }
+    } catch (err) {
+      setError(errorMessage(err, 'Profile setup failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -266,7 +238,7 @@ export default function ProfileSetupPage() {
                   {calculations.edd}
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-6">
-                  Calculated automatically based on your Last Menstrual Period using standard WHO Naegele's rule formulas.
+                  Calculated automatically based on your Last Menstrual Period using standard WHO Naegele&apos;s rule formulas.
                 </p>
 
                 <hr className="border-border my-6" />

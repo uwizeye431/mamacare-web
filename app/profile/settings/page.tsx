@@ -1,12 +1,16 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  User, Mail, Phone, Globe, Upload, Sparkles, Camera, Check, 
+  User, Mail, Phone, Globe, Sparkles, Camera, Check, 
   Loader2, AlertCircle, CheckCircle2, ArrowLeft, ShieldCheck
 } from 'lucide-react';
 import { useAuthStore } from '../../../store/authStore';
+import { API_URL } from '../../../lib/api';
+import { errorMessage } from '../../../lib/errors';
+
+const subscribeNoop = () => () => {};
 
 // Cute maternal vector cartoon preset avatars for a premium initial experience!
 const PRESET_AVATARS = [
@@ -16,30 +20,20 @@ const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&q=80&w=200&h=200'  // Mother Avatar 4
 ];
 
-export default function ProfileSettingsPage() {
+function SettingsForm() {
   const router = useRouter();
   const { user, setAuth } = useAuthStore();
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [language, setLanguage] = useState('rw');
-  const [avatarUrl, setAvatarUrl] = useState('');
+  // Start the form from the saved user (this component only renders in the browser, see below)
+  const [name, setName] = useState(() => user?.name || '');
+  const [email, setEmail] = useState(() => user?.email || '');
+  const [phone, setPhone] = useState(() => user?.phone || '');
+  const [language, setLanguage] = useState(() => user?.language || 'rw');
+  const [avatarUrl, setAvatarUrl] = useState(() => user?.avatar_url || '');
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-
-  // Set initial states when user loads
-  useEffect(() => {
-    if (user) {
-      setName(user.name || '');
-      setEmail(user.email || '');
-      setPhone(user.phone || '');
-      setLanguage(user.language || 'rw');
-      setAvatarUrl(user.avatar_url || '');
-    }
-  }, [user]);
 
   // Handle custom image upload file reading as base64
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +67,7 @@ export default function ProfileSettingsPage() {
     setSuccess(false);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
+      const response = await fetch(`${API_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -106,8 +100,8 @@ export default function ProfileSettingsPage() {
       setTimeout(() => {
         router.push('/dashboard');
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save settings. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to save settings. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -318,4 +312,19 @@ export default function ProfileSettingsPage() {
       </div>
     </main>
   );
+}
+
+// The logged-in user lives in localStorage, which only exists in the browser. Render the form
+// only there, keyed by user, so its fields start from the saved values without a hydration mismatch.
+export default function ProfileSettingsPage() {
+  const { user } = useAuthStore();
+  const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  if (!isClient) {
+    return (
+      <main className="min-h-screen w-full bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" aria-label="Loading" />
+      </main>
+    );
+  }
+  return <SettingsForm key={user?.id ?? 'guest'} />;
 }
