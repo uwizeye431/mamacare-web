@@ -3,30 +3,49 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Activity, BookOpen, Dumbbell, Heart, Info, LayoutDashboard, LogOut, Menu, Sparkles, Stethoscope, X } from "lucide-react";
+import { Activity, Baby, BookOpen, ShieldCheck, Dumbbell, Heart, Info, LayoutDashboard, LogOut, Menu, Sparkles, Stethoscope, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ThemeToggle } from "./ThemeToggle";
+import LanguageSwitcher from "./LanguageSwitcher";
 import { useAuthStore } from "../store/authStore";
+import { API_URL } from "../lib/api";
 
 export default function Navbar() {
   const { user, isAuthenticated, clearAuth } = useAuthStore();
   const pathname = usePathname();
+  const t = useTranslations("Nav");
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // End the session on the server too (clears the auth cookies), not just in this browser tab
+  const handleLogout = async () => {
+    try {
+      await fetch(API_URL + "/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // Server unreachable: still log out locally
+    }
+    clearAuth();
+    setMobileOpen(false);
+  };
+
   const navItems = [
-    { href: "/", label: "Home", icon: Heart },
-    { href: "/symptoms", label: "Symptom Triage", icon: Activity },
-    { href: "/fitness", label: "Fitness", icon: Dumbbell },
-    { href: "/baby-names", label: "Baby Names", icon: Sparkles },
+    { href: "/", label: t("home"), icon: Heart },
+    { href: "/prenatal-care", label: t("prenatal"), icon: Baby },
+    { href: "/symptoms", label: t("symptoms"), icon: Activity },
+    { href: "/fitness", label: t("fitness"), icon: Dumbbell },
+    { href: "/baby-names", label: t("babyNames"), icon: Sparkles },
   ];
 
   if (isAuthenticated) {
-    navItems.push({ href: "/dashboard", label: "My Journey", icon: LayoutDashboard });
+    navItems.push({ href: "/dashboard", label: t("myJourney"), icon: LayoutDashboard });
+    if (user?.role === "admin") {
+      navItems.push({ href: "/admin", label: t("admin"), icon: ShieldCheck });
+    }
   }
 
   const quickLinks = [
-    { href: "/about", label: "About", icon: Info },
-    { href: "/blog", label: "Blog", icon: BookOpen },
-    { href: "/pediatric-basics", label: "Pediatric", icon: Stethoscope },
+    { href: "/about", label: t("about"), icon: Info },
+    { href: "/blog", label: t("blog"), icon: BookOpen },
+    { href: "/pediatric-basics", label: t("pediatric"), icon: Stethoscope },
   ];
 
   const navItemClass = (href: string) =>
@@ -70,6 +89,7 @@ export default function Navbar() {
                 );
               })}
             </div>
+            <LanguageSwitcher />
             <ThemeToggle />
 
             {isAuthenticated ? (
@@ -77,7 +97,7 @@ export default function Navbar() {
                 <Link 
                   href="/profile/settings" 
                   className="flex items-center gap-2 hover:opacity-85 transition-all rounded-full border border-border bg-card px-3 py-1.5"
-                  title="Manage Account"
+                  title={t("manageAccount")}
                 >
                   {user?.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -96,9 +116,10 @@ export default function Navbar() {
                   </span>
                 </Link>
                 <button
-                  onClick={() => clearAuth()}
+                  onClick={handleLogout}
                   className="p-2 text-muted-foreground hover:text-destructive transition-colors ml-1 rounded-full hover:bg-muted"
-                  title="Logout"
+                  title={t("logout")}
+                  aria-label={t("logout")}
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -108,17 +129,19 @@ export default function Navbar() {
                 href="/login" 
                 className="px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all shadow-md"
               >
-                Sign In
+                {t("signIn")}
               </Link>
             )}
           </div>
 
-          <div className="md:hidden flex items-center gap-4">
+          <div className="md:hidden flex items-center gap-3">
+            <LanguageSwitcher />
             <ThemeToggle />
             <button
               onClick={() => setMobileOpen((prev) => !prev)}
               className="p-2 rounded-full border border-border bg-card text-foreground"
-              aria-label="Toggle navigation menu"
+              aria-label={t("toggleMenu")}
+              aria-expanded={mobileOpen}
             >
               {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
@@ -147,7 +170,7 @@ export default function Navbar() {
                 );
               })}
               <div className="pt-2 mt-1 border-t border-border">
-                <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Quick Links</p>
+                <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("quickLinks")}</p>
                 {quickLinks.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -175,10 +198,10 @@ export default function Navbar() {
                     onClick={() => setMobileOpen(false)}
                     className="text-sm font-semibold text-foreground hover:text-primary"
                   >
-                    My Account
+                    {t("myAccount")}
                   </Link>
-                  <button onClick={() => clearAuth()} className="text-sm font-semibold text-destructive">
-                    Logout
+                  <button onClick={handleLogout} className="text-sm font-semibold text-destructive">
+                    {t("logout")}
                   </button>
                 </div>
               ) : (
@@ -187,7 +210,7 @@ export default function Navbar() {
                   onClick={() => setMobileOpen(false)}
                   className="block text-center rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground"
                 >
-                  Sign In
+                  {t("signIn")}
                 </Link>
               )}
             </div>
