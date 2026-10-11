@@ -11,7 +11,7 @@ const CARE_CARDS = [
       "https://images.unsplash.com/photo-1590333748338-d629e4564ad9?auto=format&fit=crop&q=80&w=600&h=400",
     alt: "African pregnant woman receiving prenatal care",
     badge: "Most Popular",
-    href: "/profile",
+    href: "/prenatal-care",
   },
   {
     title: "Postpartum Support",

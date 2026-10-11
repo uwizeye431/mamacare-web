@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Postpartum support",
+  description: "A week-by-week guide to recovering after birth, with the danger signs to watch for.",
+};
 
 const weekPlan = [
   {
@@ -34,7 +41,9 @@ const weekPlan = [
   },
 ];
 
-export default function PostpartumSupportPage() {
+export default async function PostpartumSupportPage() {
+  const t = await getTranslations("Danger");
+  const dangerSigns = t.raw("postpartum") as string[];
   return (
     <main className="min-h-screen bg-background pt-24 pb-16 px-4">
       <div className="max-w-6xl mx-auto">
@@ -156,18 +165,14 @@ export default function PostpartumSupportPage() {
             {/* Card Content */}
             <div className="p-8 flex-grow">
               <h3 className="text-2xl font-black text-foreground mb-6 group-hover:text-destructive transition-colors duration-300">
-                Danger Signs: Seek Urgent Care
+                {t("postpartumTitle")}
               </h3>
               <div className="space-y-4">
-                <div className="relative pl-4 border-l-2 border-destructive/60 text-sm sm:text-base text-foreground/85 leading-relaxed hover:border-destructive transition-colors duration-300">
-                  Heavy bleeding soaking pads quickly
-                </div>
-                <div className="relative pl-4 border-l-2 border-destructive/60 text-sm sm:text-base text-foreground/85 leading-relaxed hover:border-destructive transition-colors duration-300">
-                  Fever, severe headache, chest pain, or breathing difficulty
-                </div>
-                <div className="relative pl-4 border-l-2 border-destructive/60 text-sm sm:text-base text-foreground/85 leading-relaxed hover:border-destructive transition-colors duration-300">
-                  Persistent sadness, hopelessness, or harmful thoughts
-                </div>
+                {dangerSigns.map((sign) => (
+                  <div key={sign} className="relative pl-4 border-l-2 border-destructive/60 text-sm sm:text-base text-foreground/85 leading-relaxed hover:border-destructive transition-colors duration-300">
+                    {sign}
+                  </div>
+                ))}
               </div>
             </div>
           </article>

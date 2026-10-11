@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, MapPin } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Careers",
+  description: "Join the MamaCare team and help improve maternal and newborn health.",
+};
 
 const openings = [
   {

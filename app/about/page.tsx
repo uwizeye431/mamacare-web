@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "About us",
+  description: "Who we are and why we built MamaCare: maternal and newborn health support for families in Rwanda.",
+};
 
 const values = [
   {

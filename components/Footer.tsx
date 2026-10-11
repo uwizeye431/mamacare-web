@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Mail, Phone, MapPin, Facebook, Youtube, Instagram, Send } from "lucide-react";
+import { Heart, Mail, Phone, MapPin, Facebook, Youtube, Instagram } from "lucide-react";
 import Link from "next/link";
 
 const XIcon = () => (
@@ -88,7 +88,7 @@ export default function Footer() {
             <ul className="space-y-2.5">
               <li>
                 <Link
-                  href="#"
+                  href="/prenatal-care"
                   className="group flex items-center text-sm text-slate-500 hover:text-pink-500 dark:text-slate-400 dark:hover:text-pink-400 transition-all duration-200"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 group-hover:bg-pink-500 transition-colors mr-2 shrink-0" />
@@ -106,7 +106,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="#"
+                  href="/lactation-consulting"
                   className="group flex items-center text-sm text-slate-500 hover:text-pink-500 dark:text-slate-400 dark:hover:text-pink-400 transition-all duration-200"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 group-hover:bg-pink-500 transition-colors mr-2 shrink-0" />
@@ -209,10 +209,10 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} MamaCare. All rights reserved.
           </p>
           <div className="flex space-x-6 text-xs text-slate-400 dark:text-slate-500">
-            <Link href="#" className="hover:text-pink-500 dark:hover:text-pink-400 transition-colors">
+            <Link href="/privacy" className="hover:text-pink-500 dark:hover:text-pink-400 transition-colors">
               Privacy Policy
             </Link>
-            <Link href="#" className="hover:text-pink-500 dark:hover:text-pink-400 transition-colors">
+            <Link href="/terms" className="hover:text-pink-500 dark:hover:text-pink-400 transition-colors">
               Terms of Service
             </Link>
           </div>

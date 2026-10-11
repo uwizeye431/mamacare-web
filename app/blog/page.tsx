@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Clock3, Sparkles } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Blog",
+  description: "Articles on pregnancy, antenatal care, nutrition and newborn health.",
+};
 
 const posts = [
   {

@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ClipboardList, FileText, HeartPulse, MessageSquareText } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "How to prepare for your first ANC visit",
+  description: "What happens at your first antenatal care visit and how to prepare for it.",
+};
 
 const checklist = [
   {

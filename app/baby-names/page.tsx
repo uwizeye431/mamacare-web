@@ -1,8 +1,7 @@
 "use client"
 
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { Baby, Search, RefreshCw, Sparkles, ArrowLeft, Heart, BookOpen, Globe2, Star, Zap } from 'lucide-react';
+import { Search, RefreshCw, Sparkles, Heart, Zap } from 'lucide-react';
 
 // ─── Large curated name database ───────────────────────────────────────────────
 const NAME_DATABASE: {
@@ -95,8 +94,10 @@ const MEANINGS = ['any', 'peace', 'God', 'beautiful', 'strength', 'love', 'life'
 const SYLLABLES_OPTIONS = ['any', '1', '2', '3', '4', '5'];
 const LETTERS = ['any', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
+type Gender = 'all' | 'boy' | 'girl' | 'neutral';
+
 export default function BabyNamesPage() {
-  const [gender, setGender] = useState<'all' | 'boy' | 'girl' | 'neutral'>('all');
+  const [gender, setGender] = useState<Gender>('all');
   const [startLetter, setStartLetter] = useState('any');
   const [origin, setOrigin] = useState('any');
   const [style, setStyle] = useState('any');
@@ -198,7 +199,7 @@ export default function BabyNamesPage() {
           ].map(g => (
             <button
               key={g.val}
-              onClick={() => setGender(g.val as any)}
+              onClick={() => setGender(g.val as Gender)}
               className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${
                 gender === g.val
                   ? 'bg-primary text-primary-foreground border-primary shadow-md'
@@ -246,7 +247,7 @@ export default function BabyNamesPage() {
                 {/* Gender + Starting letter */}
                 <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
                   <span className="font-semibold text-foreground shrink-0">for</span>
-                  <select value={gender} onChange={e => setGender(e.target.value as any)} className={SELECT_CLS}>
+                  <select value={gender} onChange={e => setGender(e.target.value as Gender)} className={SELECT_CLS}>
                     <option value="all">all genders</option>
                     <option value="boy">boys</option>
                     <option value="girl">girls</option>

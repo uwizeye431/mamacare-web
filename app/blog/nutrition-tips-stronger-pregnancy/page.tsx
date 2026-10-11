@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Nutrition tips for a stronger pregnancy",
+  description: "Practical, affordable nutrition advice for a healthy pregnancy.",
+};
 
 const mealGroups = [
   {

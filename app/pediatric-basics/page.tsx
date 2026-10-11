@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Pediatric basics",
+  description: "Newborn and baby care basics: feeding, sleep, vaccinations and warning signs.",
+};
 
 const cards = [
   {
