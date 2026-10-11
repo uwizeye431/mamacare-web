@@ -3,11 +3,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Heart, Mail, Lock, Phone, ArrowRight, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../../store/authStore';
+import { API_URL } from '../../../lib/api';
+import { errorMessage } from '../../../lib/errors';
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useTranslations('Auth');
   const setAuth = useAuthStore((state) => state.setAuth);
   
   const [useEmail, setUseEmail] = useState(true);
@@ -21,10 +25,9 @@ export default function LoginPage() {
   const [otpMode, setOtpMode] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [otpCodes, setOtpCodes] = useState<string[]>(Array(6).fill(''));
-  const [timer, setTimer] = useState(600); // 10 minutes
+  const [timer, setTimer] = useState(60); // OTP lifetime in seconds (set from the API response)
   const [resendDisabled, setResendDisabled] = useState(true);
   const [resendLoading, setResendLoading] = useState(false);
-  const [devOtp, setDevOtp] = useState('');
   
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -35,8 +38,6 @@ export default function LoginPage() {
       interval = setInterval(() => {
         setTimer((prev) => prev - 1);
       }, 1000);
-    } else if (timer === 0) {
-      setResendDisabled(false);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -46,7 +47,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier || !password) {
-      setError('Please fill in all fields');
+      setError(t('fillAllFields'));
       return;
     }
 
@@ -54,7 +55,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -68,13 +69,11 @@ export default function LoginPage() {
         if (response.status === 403 && data.requiresVerification) {
           setVerificationEmail(data.email);
           setOtpMode(true);
-          setTimer(600);
-          setResendDisabled(true);
+          setTimer(data.expiresIn ?? 60);
+          // If the email could not be sent, let the user resend right away
+          setResendDisabled(data.emailSent !== false);
           setOtpCodes(Array(6).fill(''));
-          setError('');
-          if (data.otp) {
-            setDevOtp(data.otp);
-          }
+          setError(data.emailSent === false ? data.error : '');
           setTimeout(() => {
             otpInputsRef.current[0]?.focus();
           }, 100);
@@ -86,8 +85,8 @@ export default function LoginPage() {
       setAuth(data.user);
       setSuccess(true);
       setTimeout(() => router.push('/'), 1500);
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, t('loginFailed'), t('cannotReachServer')));
     } finally {
       setLoading(false);
     }
@@ -144,7 +143,7 @@ export default function LoginPage() {
     e.preventDefault();
     const otp = otpCodes.join('');
     if (otp.length !== 6) {
-      setError('Please enter all 6 digits');
+      setError(t('enterAllDigits'));
       return;
     }
 
@@ -152,7 +151,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp`, {
+      const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,8 +175,8 @@ export default function LoginPage() {
       setTimeout(() => {
         router.push('/');
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || 'Invalid code. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, t('invalidCode'), t('cannotReachServer')));
     } finally {
       setLoading(false);
     }
@@ -189,7 +188,7 @@ export default function LoginPage() {
     setError('');
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/resend-otp`, {
+      const response = await fetch(`${API_URL}/api/auth/resend-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,21 +199,23 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Current code is still valid: sync the countdown with the server
+        if (response.status === 429 && data.expiresIn) {
+          setTimer(data.expiresIn);
+          setResendDisabled(true);
+        }
         throw new Error(data.error || 'Failed to resend code');
       }
 
-      setTimer(600);
+      setTimer(data.expiresIn ?? 60);
       setResendDisabled(true);
       setOtpCodes(Array(6).fill(''));
-      if (data.otp) {
-        setDevOtp(data.otp);
-      }
       
       setTimeout(() => {
         otpInputsRef.current[0]?.focus();
       }, 50);
-    } catch (err: any) {
-      setError(err.message || 'Failed to resend verification code. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, t('resendFailed'), t('cannotReachServer')));
     } finally {
       setResendLoading(false);
     }
@@ -238,10 +239,9 @@ export default function LoginPage() {
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
               <Mail className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Verify Your Email</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{t('verifyTitle')}</h1>
             <p className="text-muted-foreground mt-3 text-sm text-center max-w-sm">
-              Your account exists but is not verified yet. We sent a 6-digit confirmation code to{' '}
-              <span className="font-bold text-foreground">{verificationEmail}</span>. Enter it below to sign in.
+              {t.rich('codeSentLogin', { email: verificationEmail, b: (chunks) => <span className="font-bold text-foreground">{chunks}</span> })}
             </p>
           </div>
 
@@ -257,7 +257,7 @@ export default function LoginPage() {
           {success && (
             <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 flex items-start gap-3 text-sm">
               <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-              <span>Email verified successfully! Signing you in...</span>
+              <span>{t('verifiedSigningIn')}</span>
             </div>
           )}
 
@@ -284,21 +284,21 @@ export default function LoginPage() {
             <div className="flex flex-col items-center justify-center gap-2">
               {timer > 0 ? (
                 <div className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  Code expires in <span className="font-mono font-bold text-foreground">{formatTimer()}</span>
+                  {t.rich('codeExpiresIn', { time: formatTimer(), b: (chunks) => <span className="font-mono font-bold text-foreground">{chunks}</span> })}
                 </div>
               ) : (
                 <div className="text-sm text-destructive font-semibold">
-                  Verification code has expired
+                  {t('codeExpired')}
                 </div>
               )}
 
               <button
                 type="button"
                 onClick={handleResendOtp}
-                disabled={resendDisabled || resendLoading}
+                disabled={(resendDisabled && timer > 0) || resendLoading}
                 className="text-sm font-bold text-primary hover:underline hover:opacity-90 disabled:opacity-50 disabled:no-underline transition-all mt-1"
               >
-                {resendLoading ? 'Resending code...' : 'Resend Code'}
+                {resendLoading ? t('resending') : t('resendCode')}
               </button>
             </div>
 
@@ -308,14 +308,14 @@ export default function LoginPage() {
                 onClick={() => setOtpMode(false)}
                 className="flex-1 py-4 rounded-2xl bg-card border border-border text-foreground font-bold hover:bg-muted transition-all"
               >
-                Back to Login
+                {t('backToLogin')}
               </button>
               <button
                 type="submit"
                 disabled={loading || otpCodes.some((d) => d === '')}
                 className="flex-1 py-4 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/95 transition-all shadow-lg disabled:opacity-50"
               >
-                {loading ? 'Verifying...' : 'Verify Code'}
+                {loading ? t('verifying') : t('verifyCode')}
               </button>
             </div>
           </form>
@@ -341,17 +341,17 @@ export default function LoginPage() {
           <div className="max-w-md">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white/80 text-xs font-bold uppercase tracking-wider mb-6">
               <Sparkles className="w-3.5 h-3.5 text-rose-300" />
-              Rwanda&apos;s Maternal Health Platform
+              {t('promoBadge')}
             </div>
             <h2 className="text-4xl xl:text-5xl font-black text-white leading-tight mb-4">
-              Every mother deserves expert care.
+              {t('promoTitle')}
             </h2>
             <p className="text-white/70 text-base leading-relaxed font-light">
-              AI-powered symptom triage, ANC visit tracking, baby names, and a complete prenatal health portal — in Kinyarwanda and English.
+              {t('promoText')}
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4">
-              {['10,000+ Mothers', 'WHO Certified ANC', 'AI Triage Engine'].map(tag => (
+              {(t.raw('promoTags') as string[]).map(tag => (
                 <span key={tag} className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white/80 text-xs font-semibold">
                   {tag}
                 </span>
@@ -373,9 +373,9 @@ export default function LoginPage() {
             <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-5 shadow-xl shadow-primary/25">
               <Heart className="w-8 h-8 text-white" fill="currentColor" />
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground text-center">Welcome Back</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground text-center">{t('welcomeBack')}</h1>
             <p className="text-muted-foreground mt-2 text-sm text-center max-w-xs">
-              Sign in to access your maternal care dashboard and health reports.
+              {t('loginIntro')}
             </p>
           </div>
 
@@ -389,7 +389,7 @@ export default function LoginPage() {
           {success && (
             <div className="mb-6 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 flex items-start gap-3 text-sm">
               <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-              <span>Success! Redirecting you now...</span>
+              <span>{t('loginSuccess')}</span>
             </div>
           )}
 
@@ -403,7 +403,7 @@ export default function LoginPage() {
                   useEmail ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Email Address
+                {t('email')}
               </button>
               <button
                 type="button"
@@ -412,13 +412,13 @@ export default function LoginPage() {
                   !useEmail ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Phone Number
+                {t('phone')}
               </button>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                {useEmail ? 'Email Address' : 'Phone Number'}
+                {useEmail ? t('email') : t('phone')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground">
@@ -428,7 +428,7 @@ export default function LoginPage() {
                   type={useEmail ? 'email' : 'tel'}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={useEmail ? 'name@example.com' : '+250 788...'}
+                  placeholder={useEmail ? t('emailPlaceholder') : '+250 788...'}
                   className="block w-full pl-12 pr-4 py-3.5 rounded-2xl bg-card border border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none font-medium"
                   required
                 />
@@ -438,10 +438,10 @@ export default function LoginPage() {
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Password
+                  {t('password')}
                 </label>
-                <Link href="#" className="text-xs font-semibold text-primary hover:underline">
-                  Forgot password?
+                <Link href="/forgot-password" className="text-xs font-semibold text-primary hover:underline">
+                  {t('forgotPassword')}
                 </Link>
               </div>
               <div className="relative">
@@ -467,18 +467,18 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  Signing in...
+                  {t('signingIn')}
                 </span>
               ) : (
-                <>Sign In <ArrowRight className="w-5 h-5" /></>
+                <>{t('signInButton')} <ArrowRight className="w-5 h-5" /></>
               )}
             </button>
           </form>
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
-            New to MamaCare?{' '}
+            {t('newHere')}{' '}
             <Link href="/register" className="font-bold text-primary hover:underline">
-              Create a free account
+              {t('createFree')}
             </Link>
           </p>
         </div>

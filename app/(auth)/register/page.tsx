@@ -3,18 +3,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Heart, User, Mail, Phone, Lock, ArrowRight, AlertCircle, CheckCircle2, Users, Stethoscope } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { Heart, User, Mail, Phone, Lock, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuthStore } from '../../../store/authStore';
+import { API_URL } from '../../../lib/api';
+import { errorMessage } from '../../../lib/errors';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const t = useTranslations('Auth');
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('patient');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -23,10 +27,9 @@ export default function RegisterPage() {
   const [otpMode, setOtpMode] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [otpCodes, setOtpCodes] = useState<string[]>(Array(6).fill(''));
-  const [timer, setTimer] = useState(600); // 10 minutes
+  const [timer, setTimer] = useState(60); // OTP lifetime in seconds (set from the API response)
   const [resendDisabled, setResendDisabled] = useState(true);
   const [resendLoading, setResendLoading] = useState(false);
-  const [devOtp, setDevOtp] = useState('');
   
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -37,8 +40,6 @@ export default function RegisterPage() {
       interval = setInterval(() => {
         setTimer((prev) => prev - 1);
       }, 1000);
-    } else if (timer === 0) {
-      setResendDisabled(false);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -48,7 +49,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) {
-      setError('Name, email, and password are required');
+      setError(t('requiredFields'));
+      return;
+    }
+
+    if (password.length < 8) {
+      setError(t('passwordMin'));
       return;
     }
 
@@ -56,7 +62,7 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,7 +73,7 @@ export default function RegisterPage() {
           email,
           phone: phone || undefined,
           password,
-          role,
+          acceptedTerms,
         }),
       });
 
@@ -80,13 +86,11 @@ export default function RegisterPage() {
       if (data.requiresVerification) {
         setVerificationEmail(data.email);
         setOtpMode(true);
-        setTimer(600);
-        setResendDisabled(true);
+        setTimer(data.expiresIn ?? 60);
+        // If the email could not be sent, let the user resend right away
+        setResendDisabled(data.emailSent !== false);
         setOtpCodes(Array(6).fill(''));
-        setError('');
-        if (data.otp) {
-          setDevOtp(data.otp);
-        }
+        setError(data.emailSent === false ? data.message : '');
         // Focus first box
         setTimeout(() => {
           otpInputsRef.current[0]?.focus();
@@ -100,8 +104,8 @@ export default function RegisterPage() {
       setTimeout(() => {
         router.push('/');
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, t('genericError'), t('cannotReachServer')));
     } finally {
       setLoading(false);
     }
@@ -159,7 +163,7 @@ export default function RegisterPage() {
     e.preventDefault();
     const otp = otpCodes.join('');
     if (otp.length !== 6) {
-      setError('Please enter all 6 digits');
+      setError(t('enterAllDigits'));
       return;
     }
 
@@ -167,7 +171,7 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp`, {
+      const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,8 +195,8 @@ export default function RegisterPage() {
       setTimeout(() => {
         router.push('/');
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || 'Invalid code. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, t('invalidCode'), t('cannotReachServer')));
     } finally {
       setLoading(false);
     }
@@ -204,7 +208,7 @@ export default function RegisterPage() {
     setError('');
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/resend-otp`, {
+      const response = await fetch(`${API_URL}/api/auth/resend-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -215,21 +219,23 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Current code is still valid: sync the countdown with the server
+        if (response.status === 429 && data.expiresIn) {
+          setTimer(data.expiresIn);
+          setResendDisabled(true);
+        }
         throw new Error(data.error || 'Failed to resend code');
       }
 
-      setTimer(600);
+      setTimer(data.expiresIn ?? 60);
       setResendDisabled(true);
       setOtpCodes(Array(6).fill(''));
-      if (data.otp) {
-        setDevOtp(data.otp);
-      }
       
       setTimeout(() => {
         otpInputsRef.current[0]?.focus();
       }, 50);
-    } catch (err: any) {
-      setError(err.message || 'Failed to resend verification code. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, t('resendFailed'), t('cannotReachServer')));
     } finally {
       setResendLoading(false);
     }
@@ -241,11 +247,6 @@ export default function RegisterPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const roles = [
-    { id: 'patient', title: 'Mother', desc: 'Expectant or new mom', icon: Heart },
-    { id: 'chw', title: 'CHW', desc: 'Community Health Worker', icon: Users },
-    { id: 'provider', title: 'Provider', desc: 'Doctor or Midwife', icon: Stethoscope },
-  ];
 
   // OTP Verification View rendering
   if (otpMode) {
@@ -260,10 +261,9 @@ export default function RegisterPage() {
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
               <Mail className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Verify Your Email</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{t('verifyTitle')}</h1>
             <p className="text-muted-foreground mt-3 text-sm text-center max-w-sm">
-              We sent a 6-digit confirmation code to{' '}
-              <span className="font-bold text-foreground">{verificationEmail}</span>. Enter it below to complete registration.
+              {t.rich('codeSentRegister', { email: verificationEmail, b: (chunks) => <span className="font-bold text-foreground">{chunks}</span> })}
             </p>
           </div>
 
@@ -279,7 +279,7 @@ export default function RegisterPage() {
           {success && (
             <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 flex items-start gap-3 text-sm">
               <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-              <span>Email verified successfully! Setting up your session...</span>
+              <span>{t('verifiedSettingUp')}</span>
             </div>
           )}
 
@@ -306,21 +306,21 @@ export default function RegisterPage() {
             <div className="flex flex-col items-center justify-center gap-2">
               {timer > 0 ? (
                 <div className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  Code expires in <span className="font-mono font-bold text-foreground">{formatTimer()}</span>
+                  {t.rich('codeExpiresIn', { time: formatTimer(), b: (chunks) => <span className="font-mono font-bold text-foreground">{chunks}</span> })}
                 </div>
               ) : (
                 <div className="text-sm text-destructive font-semibold">
-                  Verification code has expired
+                  {t('codeExpired')}
                 </div>
               )}
 
               <button
                 type="button"
                 onClick={handleResendOtp}
-                disabled={resendDisabled || resendLoading}
+                disabled={(resendDisabled && timer > 0) || resendLoading}
                 className="text-sm font-bold text-primary hover:underline hover:opacity-90 disabled:opacity-50 disabled:no-underline transition-all mt-1"
               >
-                {resendLoading ? 'Resending code...' : 'Resend Code'}
+                {resendLoading ? t('resending') : t('resendCode')}
               </button>
             </div>
 
@@ -330,14 +330,14 @@ export default function RegisterPage() {
                 onClick={() => setOtpMode(false)}
                 className="flex-1 py-4 rounded-2xl bg-card border border-border text-foreground font-bold hover:bg-muted transition-all"
               >
-                Back
+                {t('back')}
               </button>
               <button
                 type="submit"
                 disabled={loading || otpCodes.some((d) => d === '')}
                 className="flex-1 py-4 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/95 transition-all shadow-lg disabled:opacity-50"
               >
-                {loading ? 'Verifying...' : 'Verify Code'}
+                {loading ? t('verifying') : t('verifyCode')}
               </button>
             </div>
           </form>
@@ -358,9 +358,9 @@ export default function RegisterPage() {
           <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
             <Heart className="w-8 h-8 text-primary" fill="currentColor" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Create Account</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{t('createAccount')}</h1>
           <p className="text-muted-foreground mt-2 text-sm text-center">
-            Join MamaCare for tailored maternal and healthcare tools
+            {t('registerIntro')}
           </p>
         </div>
 
@@ -374,43 +374,14 @@ export default function RegisterPage() {
         {success && (
           <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 flex items-start gap-3 text-sm">
             <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-            <span>Registration successful! Directing to dashboard...</span>
+            <span>{t('registered')}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Dynamic Role Tiles */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-              I am joining as a
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              {roles.map((item) => {
-                const Icon = item.icon;
-                const isSelected = role === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setRole(item.id)}
-                    className={`flex flex-col items-center p-4 rounded-2xl border text-center transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 text-foreground ring-2 ring-primary/20'
-                        : 'border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className={`w-6 h-6 mb-2 ${isSelected ? 'text-primary' : ''}`} />
-                    <span className="text-sm font-bold block">{item.title}</span>
-                    <span className="text-[10px] opacity-75 hidden sm:block mt-1">{item.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-              Full Name
+              {t('fullName')}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground">
@@ -420,7 +391,7 @@ export default function RegisterPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Doe"
+                placeholder={t('namePlaceholder')}
                 className="block w-full pl-12 pr-4 py-3.5 rounded-2xl bg-card border border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none"
                 required
               />
@@ -430,7 +401,7 @@ export default function RegisterPage() {
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                Email Address
+                {t('email')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground">
@@ -440,7 +411,7 @@ export default function RegisterPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jane@example.com"
+                  placeholder={t('emailPlaceholder')}
                   className="block w-full pl-12 pr-4 py-3.5 rounded-2xl bg-card border border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none"
                   required
                 />
@@ -449,7 +420,7 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                Phone Number
+                {t('phone')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground">
@@ -468,7 +439,7 @@ export default function RegisterPage() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-              Password
+              {t('password')}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground">
@@ -478,27 +449,45 @@ export default function RegisterPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder={t('passwordPlaceholder')}
+                minLength={8}
+                autoComplete="new-password"
                 className="block w-full pl-12 pr-4 py-3.5 rounded-2xl bg-card border border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none"
                 required
               />
             </div>
           </div>
 
+          <label className="flex items-start gap-3 text-sm text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-0.5 w-4 h-4 shrink-0 rounded border-border accent-primary"
+              required
+            />
+            <span>
+              {t.rich('consent', {
+                terms: (chunks) => <Link href="/terms" target="_blank" className="font-semibold text-primary hover:underline">{chunks}</Link>,
+                privacy: (chunks) => <Link href="/privacy" target="_blank" className="font-semibold text-primary hover:underline">{chunks}</Link>,
+              })}
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !acceptedTerms}
             className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/95 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
           >
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? t('creating') : t('createAccount')}
             {!loading && <ArrowRight className="w-5 h-5" />}
           </button>
         </form>
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          Already have an account?{' '}
+          {t('haveAccount')}{' '}
           <Link href="/login" className="font-bold text-primary hover:underline">
-            Sign in
+            {t('signInLink')}
           </Link>
         </p>
       </div>
