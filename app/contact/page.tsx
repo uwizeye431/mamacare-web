@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail, MapPin, Phone, Send, Clock, CheckCircle2, AlertCircle, HeartHandshake } from "lucide-react";
+import { API_URL } from "../../lib/api";
 
 type FormState = {
   fullName: string;
@@ -37,7 +38,7 @@ export default function ContactPage() {
     setErrorMessage("");
 
     try {
-      const response = await fetch("/api/contact", {
+      const response = await fetch(`${API_URL}/api/contact`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -52,8 +53,8 @@ export default function ContactPage() {
 
       setSuccessMessage(data.message || "Message sent successfully.");
       setForm(initialState);
-    } catch (error: any) {
-      setErrorMessage(error.message || "Unable to send your message right now. Please try again.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error && error.message ? error.message : "Unable to send your message right now. Please try again.");
     } finally {
       setSubmitting(false);
     }
