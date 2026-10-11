@@ -51,7 +51,8 @@ const DANGER_SIGNALS = [
   {
     name: 'Decreased Fetal Movement',
     keywords: [
-      /not\s+moving/i, /not\s+kicking/i, /baby\s+stopped/i, 
+      /not\s+moving/i, /not\s+kicking/i, /baby\s+stopped/i, /\bno\s+(kicks?|movements?)\b/i,
+      /(not|n'?t)\s+felt\s+(the\s+|my\s+)?baby/i, /\bcan'?t\s+feel\s+(the\s+|my\s+)?baby\b/i, /\bcannot\s+feel\s+(the\s+|my\s+)?baby\b/i,
       /umwana\s+adatwiga/i, /adakinyagambura/i
     ],
   },
@@ -59,7 +60,7 @@ const DANGER_SIGNALS = [
     name: 'Severe Abdominal Pain',
     keywords: [
       /abdominal\s+pain/i, /severe\s+cramping/i, /severe\s+stomach\s+pain/i, 
-      /kubabara\s+mu\s+nda\s+cyane\b/i, /inda\s+irababara\s+cyane/i
+      /kubabara\s+mu\s+nda\s+cyane\b/i, /inda\s+irababara\s+cyane/i, /ububabare\s+bukabije/i
     ],
   },
   {

@@ -8,11 +8,27 @@ export const getPregnancyProfileByUserId = async (userId: string) => {
   return res.rows[0];
 };
 
+// Symptom logs hang off a pregnancy profile, but new users haven't filled one in yet.
+// Create an empty profile on first use so triage works right after signup.
+// Returns undefined if the user no longer exists.
+export const getOrCreatePregnancyProfile = async (userId: string) => {
+  const existing = await getPregnancyProfileByUserId(userId);
+  if (existing) return existing;
+
+  const res = await query(
+    `INSERT INTO pregnancy_profiles (user_id)
+     SELECT id FROM users WHERE id = $1
+     RETURNING id`,
+    [userId]
+  );
+  return res.rows[0];
+};
+
 export const createSymptomLog = async (
   profileId: string,
   symptoms: string,
   triageLevel: 'red' | 'yellow' | 'green',
-  aiAnalysis: any,
+  aiAnalysis: unknown,
   flagged: boolean = false
 ) => {
   // Using correct database columns: description, ai_response, visit_flagged
