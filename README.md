@@ -232,3 +232,12 @@ Set `DATABASE_URL`, `JWT_SECRET` and `JWT_REFRESH_SECRET` in `server/.env` as de
 **Verification or reset emails do not arrive**
 
 Check the email variables in `server/.env` and the API terminal for `Mailer:` messages. Locally, the code is also printed in the API terminal.
+
+**CI fails at "Install dependencies" with "package.json and package-lock.json are not in sync"**
+
+npm on Windows can drop Linux-only optional packages from `package-lock.json` after `npm install`. Regenerate the lock file without installing, then commit it:
+
+```powershell
+Remove-Item package-lock.json; npm install --package-lock-only
+npm ci --dry-run   # must succeed before you push
+```
