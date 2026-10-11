@@ -2,22 +2,36 @@ services:
   - type: web
     name: mamacare-api
     runtime: node
-    buildCommand: npm install && npx tsc --project tsconfig.server.json
-    startCommand: node dist/server/src/index.js
+    # --include=dev: NODE_ENV=production would otherwise skip TypeScript and the type packages the build needs
+    buildCommand: npm ci --include=dev && npx tsc --project tsconfig.server.json
+    # Apply any new database migrations, then start the API
+    startCommand: npm run migrate:deploy && node dist/server/src/index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 5000
+      # Proxies in front of the API: 1 = Render's load balancer. Use 2 if the website forwards /api to the API.
+      - key: TRUST_PROXY
+        value: 1
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: CONTACT_RECEIVER_EMAIL
+        sync: false
+      - key: SENTRY_DSN
         sync: false
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
         sync: false
+      # Website address(es) allowed to call the API directly, comma-separated (not needed when the website forwards /api)
       - key: CORS_ORIGINS
         sync: false

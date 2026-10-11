@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mamacare_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/mamacare_test
+      # Throwaway values for CI only (the server refuses to start without strong, distinct values)
+      JWT_SECRET: ci-only-access-0f3a9c7e51b24d68a1e0c4b79f2d3e85
+      JWT_REFRESH_SECRET: ci-only-refresh-7b1e4d92c0a35f86e2d9b0a17c4f6e31
+      NEXT_PUBLIC_API_URL: http://localhost:5000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint . --max-warnings 0
+
+      - name: Type-check the API server
+        run: npx tsc --noEmit -p tsconfig.server.json
+
+      - name: Build the web app
+        run: npx next build
+
+      - name: Apply database migrations
+        run: npm run migrate:deploy
+
+      - name: Run tests
+        run: npm test
